@@ -54,35 +54,30 @@ func main() {
 		fmt.Println("done")
 		return
 	}
-	if len(args) <= N {
-		imgs := []ImgWithID{}
-		for _, path := range args {
-			i, err := strconv.Atoi(path)
-			if err != nil {
-				panic(err)
-			}
-			path = fmt.Sprintf("image_%d.bmp", i)
-			img, format, err := loadImage(path)
-			if err != nil {
-				panic(err)
-			}
-			if format != "bmp" {
-				fmt.Printf("%s is not a bmp file\n", path)
-				return
-			}
-			fmt.Printf("loaded %s image from %s\n", format, path)
-			imgs = append(imgs, ImgWithID{
-				Image: img,
-				ID:    i,
-				Path:  path,
-			})
+	imgs := []ImgWithID{}
+	for _, path := range args {
+		i, err := strconv.Atoi(path)
+		if err != nil {
+			panic(err)
 		}
-		decryptImage(imgs...)
-		fmt.Println("done")
+		path = fmt.Sprintf("image_%d.bmp", i)
+		img, format, err := loadImage(path)
+		if err != nil {
+			panic(err)
+		}
+		if format != "bmp" {
+			fmt.Printf("%s is not a bmp file\n", path)
+			return
+		}
+		fmt.Printf("loaded %s image from %s\n", format, path)
+		imgs = append(imgs, ImgWithID{
+			Image: img,
+			ID:    i,
+			Path:  path,
+		})
 	}
-	if len(args) > N {
-		fmt.Println("too many input files")
-	}
+	decryptImage(imgs...)
+	fmt.Println("done")
 }
 
 func loadImage(path string) (image.Image, string, error) {
@@ -116,10 +111,11 @@ func generateImage(secretImg image.Image) {
 			oldColor := secretImg.At(x, y)
 			grayColor := color.GrayModel.Convert(oldColor)
 			originImg.Set(x, y, grayColor)
-			valueY := grayColor.(color.Gray).Y
+			valueY := grayColor.(color.Gray).Y + 1
 			if valueY >= 250 {
 				secretImgData = append(secretImgData, 250)
 				valueY -= 250
+				valueY += 1
 			}
 			secretImgData = append(secretImgData, uint8(valueY))
 		}
@@ -133,11 +129,10 @@ func generateImage(secretImg image.Image) {
 		}
 	}
 	for i, data := range grayImgData {
-		len := len(data)
-		h := (len-1)/w + 1
+		h := (len(data)-1)/w + 1
 		grayImg := image.NewGray(image.Rect(0, 0, w, h))
-		for i := 0; i < len; i++ {
-			grayImg.SetGray(i%w, i/w, color.Gray{Y: data[i]})
+		for i := 0; i < len(data); i++ {
+			grayImg.Set(i%w, i/w, color.Gray{Y: data[i]})
 		}
 		fileName := fmt.Sprintf("image_%d.bmp", i+1)
 		saveImage(grayImg, fileName)
@@ -183,7 +178,7 @@ func decryptImage(imgs ...ImgWithID) {
 		}
 	}
 	secretImgData := []uint8{}
-	lastBig := 0
+	extBit := false
 	for i := 0; i < w*h; i++ {
 		points := [][2]int{}
 		for j := 0; j < len(imgs); j++ {
@@ -191,14 +186,17 @@ func decryptImage(imgs ...ImgWithID) {
 		}
 		result := lagrangeCoefficients(points, 251)
 		for _, coe := range result {
-			if lastBig != 0 {
-				secretImgData = append(secretImgData, uint8(lastBig+coe))
-				lastBig = 0
+			if coe == 0 {
+				continue
+			}
+			if extBit {
+				secretImgData = append(secretImgData, uint8(250+coe-2))
+				extBit = false
 			} else {
-				if coe >= 250 {
-					lastBig = coe
+				if coe == 250 {
+					extBit = true
 				} else {
-					secretImgData = append(secretImgData, uint8(coe))
+					secretImgData = append(secretImgData, uint8(coe-1))
 				}
 			}
 		}
