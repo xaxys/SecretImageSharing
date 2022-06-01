@@ -111,7 +111,7 @@ func generateImage(secretImg image.Image) {
 			oldColor := secretImg.At(x, y)
 			grayColor := color.GrayModel.Convert(oldColor)
 			originImg.Set(x, y, grayColor)
-			valueY := grayColor.(color.Gray).Y + 1
+			valueY := int(grayColor.(color.Gray).Y) + 1
 			if valueY >= 250 {
 				secretImgData = append(secretImgData, 250)
 				valueY -= 250
@@ -133,6 +133,9 @@ func generateImage(secretImg image.Image) {
 		grayImg := image.NewGray(image.Rect(0, 0, w, h))
 		for i := 0; i < len(data); i++ {
 			grayImg.Set(i%w, i/w, color.Gray{Y: data[i]})
+		}
+		for i := len(data); i < w*h; i++ {
+			grayImg.Set(i%w, i/w, color.Gray{Y: 255})
 		}
 		fileName := fmt.Sprintf("image_%d.bmp", i+1)
 		saveImage(grayImg, fileName)
@@ -181,8 +184,11 @@ func decryptImage(imgs ...ImgWithID) {
 	extBit := false
 	for i := 0; i < w*h; i++ {
 		points := [][2]int{}
-		for j := 0; j < len(imgs); j++ {
+		for j := 0; j < len(imgs) && grayImgData[j][i] != 255; j++ {
 			points = append(points, [2]int{imgs[j].ID, int(grayImgData[j][i])})
+		}
+		if len(points) != len(imgs) {
+			continue
 		}
 		result := lagrangeCoefficients(points, 251)
 		for _, coe := range result {
